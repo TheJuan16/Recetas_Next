@@ -2,7 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Heart, ChefHat, Compass, X, WifiOff, Globe, CheckCircle2, Trash2 } from 'lucide-react';
+import {
+  Search,
+  Heart,
+  ChefHat,
+  Compass,
+  X,
+  WifiOff,
+  Globe,
+  CheckCircle2,
+  Trash2,
+} from 'lucide-react';
 import { Recipe } from '@/types/recipe';
 import { searchRecipes, getCategories } from '@/lib/recipesApi';
 
@@ -20,6 +30,7 @@ export default function RecipeApp() {
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<Recipe | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [favorites, setFavorites] = useState<Recipe[]>(() => {
@@ -59,23 +70,33 @@ export default function RecipeApp() {
     }, 2500);
   };
 
-  const toggleFavorite = (e: React.MouseEvent, recipe: Recipe) => {
+  const handleHeartClick = (e: React.MouseEvent, recipe: Recipe) => {
     e.preventDefault();
     e.stopPropagation();
 
     const exists = favorites.some((item) => item.id === recipe.id);
-    const updated = exists
-      ? favorites.filter((item) => item.id !== recipe.id)
-      : [...favorites, recipe];
+
+    if (exists) {
+      // Preguntar antes de quitar de favoritos
+      setPendingRemove(recipe);
+      return;
+    }
+
+    const updated = [...favorites, recipe];
+    setFavorites(updated);
+    localStorage.setItem('recetario_fav_recipes', JSON.stringify(updated));
+    showToast(`"${recipe.title}" se agregó a favoritos`, 'add');
+  };
+
+  const confirmRemoveFavorite = () => {
+    if (!pendingRemove) return;
+    const recipeToRemove = pendingRemove;
+    const updated = favorites.filter((item) => item.id !== recipeToRemove.id);
 
     setFavorites(updated);
     localStorage.setItem('recetario_fav_recipes', JSON.stringify(updated));
-
-    if (exists) {
-      showToast(`"${recipe.title}" se quitó de favoritos`, 'remove');
-    } else {
-      showToast(`"${recipe.title}" se agregó a favoritos`, 'add');
-    }
+    setPendingRemove(null);
+    showToast(`"${recipeToRemove.title}" se quitó de favoritos`, 'remove');
   };
 
   const baseList = activeTab === 'explore' ? recipes : favorites;
@@ -152,7 +173,10 @@ export default function RecipeApp() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map((n) => (
-              <div key={n} className="bg-white rounded-2xl h-64 animate-pulse border border-stone-200" />
+              <div
+                key={n}
+                className="bg-white rounded-2xl h-64 animate-pulse border border-stone-200"
+              />
             ))}
           </div>
         ) : displayedRecipes.length === 0 ? (
@@ -181,10 +205,9 @@ export default function RecipeApp() {
                       {recipe.category}
                     </span>
 
-                    {/* Botón de corazón en la esquina superior derecha */}
                     <button
                       type="button"
-                      onClick={(e) => toggleFavorite(e, recipe)}
+                      onClick={(e) => handleHeartClick(e, recipe)}
                       aria-label={isFav ? 'Quitar de favoritos' : 'Agregar a favoritos'}
                       className="absolute top-3 right-3 z-10 bg-white/95 hover:bg-white backdrop-blur-sm p-2.5 rounded-full shadow-md active:scale-90 transition cursor-pointer"
                     >
@@ -218,6 +241,40 @@ export default function RecipeApp() {
           </div>
         )}
       </main>
+
+      {/* Modal de confirmación para quitar de favoritos */}
+      {pendingRemove && (
+        <div
+          onClick={() => setPendingRemove(null)}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-stone-200"
+          >
+            <h3 className="text-base font-bold text-stone-900">¿Quitar de favoritos?</h3>
+            <p className="text-sm text-stone-600 mt-1.5">
+              ¿Deseas quitar <span className="font-semibold text-stone-900">{pendingRemove.title}</span> de tus recetas favoritas?
+            </p>
+            <div className="flex justify-end gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setPendingRemove(null)}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemoveFavorite}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition cursor-pointer"
+              >
+                Sí, quitar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notificación Toast flotante */}
       {toast && (

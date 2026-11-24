@@ -19,6 +19,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [keepAwake, setKeepAwake] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isFav, setIsFav] = useState<boolean>(() => {
@@ -68,20 +69,31 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
     }, 2500);
   };
 
-  const toggleFavorite = () => {
+  const handleHeartClick = () => {
+    if (!recipe) return;
+
+    if (isFav) {
+      setConfirmRemove(true);
+      return;
+    }
+
+    const saved = localStorage.getItem('recetario_fav_recipes');
+    const list: Recipe[] = saved ? JSON.parse(saved) : [];
+    const updated = [...list, recipe];
+    localStorage.setItem('recetario_fav_recipes', JSON.stringify(updated));
+    setIsFav(true);
+    showToast('Se agregó a favoritos', 'add');
+  };
+
+  const confirmRemoveFavorite = () => {
     if (!recipe) return;
     const saved = localStorage.getItem('recetario_fav_recipes');
     const list: Recipe[] = saved ? JSON.parse(saved) : [];
-    const exists = list.some((r) => r.id === recipe.id);
-    const updated = exists ? list.filter((r) => r.id !== recipe.id) : [...list, recipe];
+    const updated = list.filter((r) => r.id !== recipe.id);
     localStorage.setItem('recetario_fav_recipes', JSON.stringify(updated));
-    setIsFav(!exists);
-
-    if (exists) {
-      showToast('Se quitó de favoritos', 'remove');
-    } else {
-      showToast('Se agregó a favoritos', 'add');
-    }
+    setIsFav(false);
+    setConfirmRemove(false);
+    showToast('Se quitó de favoritos', 'remove');
   };
 
   const toggleIngredient = (idx: number) => {
@@ -134,7 +146,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
           </Link>
           <button
             type="button"
-            onClick={toggleFavorite}
+            onClick={handleHeartClick}
             aria-label={isFav ? 'Quitar de favoritos' : 'Agregar a favoritos'}
             className="bg-white/95 backdrop-blur-md p-2.5 rounded-full shadow-md active:scale-90 transition cursor-pointer"
           >
@@ -234,6 +246,40 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </section>
       </main>
+
+      {/* Modal de confirmación para quitar de favoritos */}
+      {confirmRemove && (
+        <div
+          onClick={() => setConfirmRemove(false)}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-stone-200"
+          >
+            <h3 className="text-base font-bold text-stone-900">¿Quitar de favoritos?</h3>
+            <p className="text-sm text-stone-600 mt-1.5">
+              ¿Deseas quitar <span className="font-semibold text-stone-900">{recipe.title}</span> de tus recetas favoritas?
+            </p>
+            <div className="flex justify-end gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setConfirmRemove(false)}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemoveFavorite}
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition cursor-pointer"
+              >
+                Sí, quitar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notificación Toast flotante */}
       {toast && (
